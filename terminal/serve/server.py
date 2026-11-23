@@ -4106,6 +4106,10 @@ def refuse_for_split(engine, req: dict) -> None:
         return
     if top_logprobs(req) is not None:
         raise ValueError("logprobs: not supported by the all-cards split engine; start with --split-engine off")
+    if req.get("grammar") is not None:
+        # a bare GBNF is the only way a `grammar=` / `gseed=` key can reach the wire: the split engine's parse_gen
+        # does not know either, and would end the request with "GEN: unknown key grammar" mid-reply
+        raise ValueError("grammar: not supported by the all-cards split engine; start with --split-engine off")
 
 
 class Service:

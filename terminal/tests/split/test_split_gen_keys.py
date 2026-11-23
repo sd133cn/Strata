@@ -15,9 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 ACCEPTED = {"temperature", "top_p", "top_k", "min_p", "penalty_repeat", "penalty_freq", "penalty_present", "penalty_last_n", "seed", "keep", "ckpt", "pin",
             "pcie_frac", "spec_min_p", "pipe", "aux_cpus", "cvec", "img_keys"}
 # keys the server does not send to a split engine: pen_from is dropped (StrataEngine.pen_from_key), logprobs / allowed / logit_bias are refused with a 400 first
-# (refuse_for_split, logit_bias.validate_request)
+# (refuse_for_split, logit_bias.validate_request).  grammar / gseed: a constrained request is refused with a 400 for a split engine
+# (refuse_for_split) - its parse_gen knows neither key, and grammar_ok() is false for an engine whose INFO carries no grammar=1.
 DROPPED = {"pen_from"}
-REFUSED = {"logprobs", "allowed", "logit_bias"}
+REFUSED = {"logprobs", "allowed", "logit_bias", "grammar", "gseed"}
 # keys only other engines are sent: the prefill-only request of serve/split.py,
 # and hold (the thinking budget's GEN hold=N:ID): the server sends it only to an engine whose READY line says "hold" (a --batch engine: "holdb" too), which is the
 # single-card engine (src/program/generate.cpp prints "READY <ctx> stop hold holdb"); the split engine says "READY <ctx> stop" (sfnx.cpp), so it is never sent it, and
@@ -107,6 +108,20 @@ class SplitGenKeys(unittest.TestCase):
         other = object.__new__(server.StrataEngine)
         other.split_engine = False
         server.refuse_for_split(other, {"logprobs": True, "top_logprobs": 3})   # other engines unchanged
+
+    def test_a_bare_grammar_is_refused_with_a_400_for_a_split_engine(self):
+        """grammar= / gseed= are wire keys the split engine's parse_gen does not know: it would end the request with
+        "GEN: unknown key grammar" mid-reply, so the turn is refused before anything is sent."""
+        from serve import server
+
+        e = object.__new__(server.StrataEngine)
+        e.split_engine = True
+        with self.assertRaises(ValueError) as cm:
+            server.refuse_for_split(e, {"grammar": 'root ::= "a"'})
+        self.assertIn("--split-engine off", str(cm.exception))
+        other = object.__new__(server.StrataEngine)
+        other.split_engine = False
+        server.refuse_for_split(other, {"grammar": 'root ::= "a"'})   # the single-card engine takes it
 
 
 if __name__ == "__main__":
