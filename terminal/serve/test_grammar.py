@@ -15,7 +15,9 @@ from serve import grammar as grammar_api
 from serve import grammar_schema as grammar_conv
 from serve.server import ByteTokenizer, IM_END, MockEngine, Service, StrataEngine, serve
 
-BUILD = Path(__file__).resolve().parents[1] / "build"
+# the engine's build folder holds the schema converter CLI beside strata.exe (engine/build, the layout
+# since 0.2.16); STRATA_ENGINE_BUILD points a run at another one
+BUILD = Path(os.environ.get("STRATA_ENGINE_BUILD") or Path(__file__).resolve().parents[2] / "engine" / "build")
 CONVERTER = BUILD / ("grammar_schema.exe" if os.name == "nt" else "grammar_schema")
 HAVE_CONVERTER = CONVERTER.exists()
 
