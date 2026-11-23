@@ -159,6 +159,7 @@ STRATA_PROGRAMS = {
     "strata_control/shape_engine.py": 2,  # engine --version / --geometry (inherit)
     "serve/hy4_kind.py": 1,            # `strata-hy4 --info <model>` before a Hy4-Flash start (what the engine can do: drafter, images); env through quiet_crash_env
     "serve/inkling_kind.py": 1,        # `strata-inkling --info <model>` before an Inkling-2-Mini start (drafter, images); env through quiet_crash_env
+    "serve/grammar_schema.py": 1,      # the grammar_schema converter beside the engine (JSON Schema -> GBNF); env through quiet_crash_env
     "strata_control/native_helpers.py": 1,  # an opted-in native helper (strata-<name>, no ggml; inherits)
     "strata_control/local_engine.py": 1,  # the added build's --version check (#5114, quiet_crash_env)
     "strata_control/updater.py": 4,       # --version probes and the AMD test start's strata-device probe (inherit)

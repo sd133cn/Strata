@@ -93,9 +93,11 @@ def _run_converter(exe_dir, stdin_text: str, args: list) -> str:
     exe = converter_exe(exe_dir) if exe_dir is not None else None
     if exe is None or not exe.exists():
         raise ValueError(f"the schema converter is not installed next to the engine ({exe})")
+    from strata_control.childenv import quiet_crash_env
+    env = quiet_crash_env(dict(os.environ))   # no debugger on a user's machine (the same rule every program of ours is started with)
     try:
         proc = subprocess.run([str(exe)] + args, input=stdin_text, capture_output=True, text=True,
-                              encoding="utf-8", timeout=60)
+                              encoding="utf-8", timeout=60, env=env)
     except (OSError, subprocess.SubprocessError) as e:
         raise ValueError(f"schema converter failed to run: {e}") from e
     if proc.returncode != 0:
