@@ -201,6 +201,13 @@ set_property(SOURCE ${STRATA_ROOT}/src/kernels/cpu/q2_avx2.cpp APPEND PROPERTY C
 find_package(Threads REQUIRED)
 target_link_libraries(strata_kernels_cpu PUBLIC strata_includes Threads::Threads)
 
+# The GBNF grammar core (parser, vocab, mask cache, registry): host-only, so the upstream sources ride in unchanged
+# (strata_resolve falls back to ../src).  The engine's serve loop (src/program/generate.cpp) uses the registry.
+strata_resolve(_grammar src/grammar/grammar.cpp src/grammar/grammar_vocab.cpp src/grammar/grammar_mask.cpp
+                         src/grammar/grammar_registry.cpp)
+add_library(strata_grammar STATIC ${_grammar})
+target_link_libraries(strata_grammar PUBLIC strata_includes)
+
 option(STRATA_NATIVE_EXPERTS "Native (IQ) expert support (the CPU expert pool)" ON)
 # Own-stack step 4 (0.2.16): the CPU expert pool and --mtp-q4 on the Strata quant layer (src/quant, its x86 tiers picked at run time, as in the
 # x86 CUDA / HIP engines) instead of ggml-cpu's type traits.  -DSTRATA_OWN_CPU_QUANT=OFF builds the ggml-cpu pool (ggml-cpu built for this
@@ -374,7 +381,7 @@ message(STATUS "Strata SYCL: Battlemage TLA routed experts: ${_expert_tla_enable
 
 strata_resolve(_main src/program/generate.cpp)
 add_executable(strata ${_main})
-target_link_libraries(strata PRIVATE strata_engine strata_prefill strata_spec)
+target_link_libraries(strata PRIVATE strata_engine strata_prefill strata_spec strata_grammar)
 
 # --- the kernel parity self-tests (each runs on the card and compares against a CPU reference) ---------------------
 if(STRATA_SYCL_PARITY)   # (the option is declared above, next to STRATA_OWN_CPU_QUANT: it decides whether ggml is configured)
@@ -490,6 +497,7 @@ if(STRATA_SYCL_PARITY)   # (the option is declared above, next to STRATA_OWN_CPU
     add_test(NAME ${p}_parity COMMAND ${p}_parity --selftest)
   endforeach()
   target_link_libraries(gdn_parity PRIVATE strata_prefill)  # prefill recurrence variant tests
+  target_link_libraries(sampler_parity PRIVATE strata_grammar)   # the grammar-mask block in the parity file
   add_test(NAME prefill_gdn_parity COMMAND gdn_parity --selftest --prefill-only)
   # #1795: iq_parity and ple_parity are registered as the top-level CMakeLists.txt does, not by the loop above
   # (iq_parity takes a fixture directory, not --selftest; ple_parity reads real artifacts from the engine root).

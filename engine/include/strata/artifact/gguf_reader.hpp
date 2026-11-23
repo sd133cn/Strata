@@ -337,7 +337,7 @@ struct MetaValue {
     double num() const { return (type == MetaType::F32 || type == MetaType::F64) ? f : (double)u; }
 };
 
-inline MetaValue read_value(Cursor& c, MetaType t, int depth = 0) {
+inline MetaValue read_value(Cursor& c, MetaType t, int depth = 0, bool full = false) {
     if (depth > 2) throw std::runtime_error("GGUF: array nesting too deep");
     MetaValue v;
     v.type = t;
@@ -385,11 +385,13 @@ inline MetaValue read_value(Cursor& c, MetaType t, int depth = 0) {
         v.elem = (MetaType)c.read<uint32_t>();
         v.count = c.read<uint64_t>();
         if (v.count > (1u << 24)) throw std::runtime_error("GGUF: implausible array length");
+        // a sample is all the model loader needs for most keys; `full` keeps every item
+        // (the grammar vocab reads tokenizer.ggml.tokens / token_type in full)
         const uint64_t keep = (v.elem != MetaType::STRING && v.elem != MetaType::ARRAY && v.count <= 1024) ? v.count : 64;
-        v.items.reserve((size_t)std::min<uint64_t>(v.count, keep));
+        v.items.reserve((size_t)(full ? v.count : std::min<uint64_t>(v.count, keep)));
         for (uint64_t i = 0; i < v.count; ++i) {
-            MetaValue e = read_value(c, v.elem, depth + 1);
-            if (i < keep) v.items.push_back(std::move(e)); // keep full per-layer numeric arrays; sample huge arrays
+            MetaValue e = read_value(c, v.elem, depth + 1, full);
+            if (full || i < keep) v.items.push_back(std::move(e)); // keep full per-layer numeric arrays; sample huge arrays
         }
         break;
     }
@@ -401,7 +403,7 @@ inline MetaValue read_value(Cursor& c, MetaType t, int depth = 0) {
 
 class GgufFile {
 public:
-    explicit GgufFile(const std::string& path) : path_(path) {
+    explicit GgufFile(const std::string& path, bool full_arrays = false) : path_(path), full_arrays_(full_arrays) {
         try { open(); }
         catch (...) { close(); throw; }
     }
@@ -502,7 +504,7 @@ private:
         for (uint64_t i = 0; i < n_kv; ++i) {
             std::string key = c.str();
             MetaType t = (MetaType)c.read<uint32_t>();
-            meta_.emplace(std::move(key), read_value(c, t));
+            meta_.emplace(std::move(key), read_value(c, t, 0, full_arrays_));
         }
         tensors_.reserve((size_t)n_tensors);
         // GGUF has no index to arbitrate between two tensors of one name: find() is first-match, so a
@@ -537,6 +539,7 @@ private:
     }
 
     std::string path_;
+    bool full_arrays_ = false;
     const uint8_t* base_ = nullptr;
     uint64_t size_ = 0, data_start_ = 0, alignment_ = 32;
     uint32_t version_ = 0;
